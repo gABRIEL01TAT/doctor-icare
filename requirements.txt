@@ -1,0 +1,5 @@
+django==5.2.7
+joblib==1.5.2
+scikit-learn==1.7.2
+psycopg2==2.9.11
+fontawesomefree
