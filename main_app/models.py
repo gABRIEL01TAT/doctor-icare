@@ -105,3 +105,17 @@ class rating_review(models.Model):
         new_rating = int(new_rating)
         
         return new_rating
+
+
+class DrugSearchHistory(models.Model):
+    patient = models.ForeignKey(patient, on_delete=models.CASCADE)
+    drug_name = models.CharField(max_length=100)
+    search_date = models.DateTimeField(auto_now_add=True)
+
+
+class PharmacySelectionHistory(models.Model):
+    patient = models.ForeignKey(patient, on_delete=models.CASCADE)
+    pharmacy_name = models.CharField(max_length=100)
+    pharmacy_location = models.CharField(max_length=200)
+    drug_name = models.CharField(max_length=100)
+    selection_date = models.DateTimeField(auto_now_add=True)

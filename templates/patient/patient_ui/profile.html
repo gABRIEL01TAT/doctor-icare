@@ -3,7 +3,8 @@
 
  
     {% block head %}
-   
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 {% endblock %}
 
 
@@ -39,20 +40,45 @@
 
         <div class="col" >
                <div class="row">
-            
-               <a id="links" class="btn btn-outline-info btn-block" href="{% url 'checkdisease' %}">check disease </a><br>
-               </div>
+                <input type="text" id="drug-search" class="form-control" placeholder="Search for a drug..." list="drug-list">
+                <datalist id="drug-list">
+                    {% for drug in common_drugs %}
+                    <option value="{{ drug }}">
+                    {% endfor %}
+                </datalist>
+                <button id="search-btn" class="btn btn-primary mt-2">Search</button>
+                </div>
 
                <div class="row">
             
-                <a id="links" class="btn btn-outline-info btn-block" href="{% url 'disease_views' %}">Buy your diseasee online from here </a><br>
+                <div id="map" style="height: 400px; width: 100%;"></div>
                 </div>
 
-                
-               <div class="row">
-                <a class="btn btn-outline-info btn-block" href="{% url 'pconsultation_history' %}">view consulation history</a><br>
+                <div class="row">
+                <div id="pharmacy-list" class="mt-3"></div>
                 </div>
-                  
+
+                <div class="row">
+                <div class="mt-3">
+                    <h4>Drug Search History</h4>
+                    <ul id="drug-history-list">
+                        {% for history in drug_histories %}
+                        <li>{{ history.drug_name }} - {{ history.search_date }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                </div>
+
+                <div class="row">
+                <div class="mt-3">
+                    <h4>Selected Pharmacies History</h4>
+                    <ul id="pharmacy-history-list">
+                        {% for history in pharmacy_histories %}
+                        <li>{{ history.pharmacy_name }} ({{ history.drug_name }}) - {{ history.selection_date }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                </div>
                 
                <div class="row">
                 <button class="btn btn-outline-info btn-block" data-toggle="modal" data-target="#myModal-feedback">Give feedbacks </button><br>
@@ -96,9 +122,198 @@
     </div>
 
 <script>
+let map;
+let userLat, userLng;
+let allPharmacies = [];
+let markers = [];
+let userMarker;
+let pharmaciesLoaded = false;
+
+function initMap() {
+    // Default location (Sydney, Australia)
+    const defaultLat = -33.8688;
+    const defaultLng = 151.2093;
+
+    map = L.map('map').setView([defaultLat, defaultLng], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Try to get user's current location
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                userLat = position.coords.latitude;
+                userLng = position.coords.longitude;
+                map.setView([userLat, userLng], 15);
+                userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+                searchPharmacies(userLat, userLng);
+            },
+            () => {
+                // If geolocation fails, use default location
+                userLat = defaultLat;
+                userLng = defaultLng;
+                userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+                searchPharmacies(userLat, userLng);
+            }
+        );
+    } else {
+        // Browser doesn't support Geolocation
+        userLat = defaultLat;
+        userLng = defaultLng;
+        userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+        searchPharmacies(userLat, userLng);
+    }
+}
+
+function searchPharmacies(lat, lng) {
+    const radius = 1500; // 1.5 km
+    const query = `
+        [out:json];
+        node(around:${radius},${lat},${lng})["amenity"="pharmacy"];
+        out;
+    `;
+
+    fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: query
+    })
+    .then(response => response.json())
+    .then(data => {
+        allPharmacies = data.elements;
+        pharmaciesLoaded = true;
+        displayPharmacies(allPharmacies);
+    })
+    .catch(error => {
+        console.error('Error fetching pharmacies:', error);
+    });
+}
+
+function displayPharmacies(pharmacies) {
+    // Clear existing markers
+    markers.forEach(marker => map.removeLayer(marker));
+    markers = [];
+
+    pharmacies.forEach(pharmacy => {
+        const marker = L.marker([pharmacy.lat, pharmacy.lon]).addTo(map);
+        marker.bindPopup(pharmacy.tags.name || 'Pharmacy');
+        markers.push(marker);
+    });
+}
+
+function filterPharmaciesByDrug(drugName) {
+    // Placeholder for API calls to check drug availability in each pharmacy
+    // For each pharmacy, call their API to check if drug is available
+    // For now, simulate with random availability
+
+    const filtered = allPharmacies.map(pharmacy => {
+        // TODO: Integrate pharmacy API here
+        // Example: fetch(`https://pharmacy-api.com/check?drug=${drugName}&pharmacy=${pharmacy.id}`)
+        // For now, random availability
+        const available = Math.random() > 0.2; // 80% chance available
+        const stock = available ? Math.floor(Math.random() * 100) + 1 : 0;
+        return { ...pharmacy, available, stock };
+    });
+
+    // Show all pharmacies, mark available ones
+    displayPharmacies(filtered.filter(p => p.available));
+    displayPharmacyList(filtered, drugName);
+}
+
+function displayPharmacyList(pharmacies, drugName) {
+    const listDiv = document.getElementById('pharmacy-list');
+    listDiv.innerHTML = '<h4>Pharmacies near you:</h4>';
+    pharmacies.forEach(pharmacy => {
+        const item = document.createElement('div');
+        item.className = 'pharmacy-item border p-2 mb-2';
+        const status = pharmacy.available ? 'Available' : 'Not Available';
+        const buttonHtml = pharmacy.available ? `<button class="btn btn-sm btn-success select-pharmacy" data-name="${pharmacy.tags.name || 'Pharmacy'}" data-location="${pharmacy.lat},${pharmacy.lon}" data-drug="${drugName}">Select</button>` : '';
+        item.innerHTML = `
+            <strong>${pharmacy.tags.name || 'Pharmacy'}</strong><br>
+            Location: ${pharmacy.lat.toFixed(4)}, ${pharmacy.lon.toFixed(4)}<br>
+            Stock: ${pharmacy.stock}<br>
+            Status: ${status}<br>
+            ${buttonHtml}
+        `;
+        listDiv.appendChild(item);
+    });
+}
+
+function selectPharmacy(pharmacyName, location, drugName) {
+    // Clear all markers except user
+    markers.forEach(marker => map.removeLayer(marker));
+    map.removeLayer(userMarker);
+
+    // Add back user marker
+    userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+
+    // Find and add selected pharmacy marker
+    const pharmacy = allPharmacies.find(p => (p.tags.name || 'Pharmacy') === pharmacyName);
+    if (pharmacy) {
+        const marker = L.marker([pharmacy.lat, pharmacy.lon]).addTo(map);
+        marker.bindPopup(pharmacy.tags.name || 'Pharmacy').openPopup();
+        markers = [marker];
+        map.setView([pharmacy.lat, pharmacy.lon], 16);
+    }
+
+    // Save selection to history
+    savePharmacySelection(pharmacyName, location, drugName);
+}
+
+function savePharmacySelection(pharmacyName, location, drugName) {
+    // AJAX to save to DB
+    $.ajax({
+        url: "{% url 'save_pharmacy_selection' %}",
+        type: "POST",
+        data: {
+            pharmacy_name: pharmacyName,
+            pharmacy_location: location,
+            drug_name: drugName,
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+        },
+        success: function(data) {
+            alert('Pharmacy selected and saved to history.');
+        }
+    });
+}
+
+window.addEventListener('load', initMap);
 
 
   $(document).ready(function() {
+    $('#search-btn').click(function() {
+        const drugName = $('#drug-search').val().trim();
+        if (drugName) {
+            if (!pharmaciesLoaded) {
+                alert('Please wait for the map to load pharmacies.');
+                return;
+            }
+            // Save search to history
+            $.ajax({
+                url: "{% url 'save_drug_search' %}",
+                type: "POST",
+                data: {
+                    drug_name: drugName,
+                    csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+                },
+                success: function(data) {
+                    filterPharmaciesByDrug(drugName);
+                },
+                error: function() {
+                    // Even if save fails, filter
+                    filterPharmaciesByDrug(drugName);
+                }
+            });
+        }
+    });
+
+    $(document).on('click', '.select-pharmacy', function() {
+        const pharmacyName = $(this).data('name');
+        const location = $(this).data('location');
+        const drugName = $(this).data('drug');
+        selectPharmacy(pharmacyName, location, drugName);
+    });
 
     $('#submit').click( function(event){
   

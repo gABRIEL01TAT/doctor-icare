@@ -5,15 +5,35 @@ from datetime import date
 
 from django.contrib import messages
 from django.contrib.auth.models import User , auth
-from .models import patient , doctor , diseaseinfo , consultation ,rating_review
+from .models import patient , doctor , diseaseinfo , consultation ,rating_review, DrugSearchHistory, PharmacySelectionHistory
 from chats.models import Chat,Feedback
 
-# Create your views here.
-
-
-#loading trained_model
-import joblib as jb
-model = jb.load('trained_model')
+# Common drugs list for autocomplete
+COMMON_DRUGS = [
+    'Aspirin', 'Ibuprofen', 'Paracetamol', 'Amoxicillin', 'Ciprofloxacin', 'Metformin', 'Lisinopril', 'Simvastatin',
+    'Omeprazole', 'Losartan', 'Amlodipine', 'Hydrochlorothiazide', 'Furosemide', 'Warfarin', 'Clopidogrel',
+    'Prednisone', 'Dexamethasone', 'Insulin', 'Metoprolol', 'Atenolol', 'Atorvastatin', 'Rosuvastatin',
+    'Gabapentin', 'Pregabalin', 'Sertraline', 'Fluoxetine', 'Citalopram', 'Escitalopram', 'Venlafaxine',
+    'Duloxetine', 'Amitriptyline', 'Trazodone', 'Alprazolam', 'Lorazepam', 'Diazepam', 'Clonazepam',
+    'Zolpidem', 'Melatonin', 'Cetirizine', 'Loratadine', 'Diphenhydramine', 'Fexofenadine', 'Montelukast',
+    'Salbutamol', 'Budesonide', 'Fluticasone', 'Theophylline', 'Codeine', 'Morphine', 'Tramadol',
+    'Oxycodone', 'Hydrocodone', 'Methadone', 'Buprenorphine', 'Naloxone', 'Fentanyl', 'Lidocaine',
+    'Benzocaine', 'Procaine', 'Tetracycline', 'Doxycycline', 'Azithromycin', 'Clarithromycin', 'Erythromycin',
+    'Cephalexin', 'Ciprofloxacin', 'Levofloxacin', 'Sulfamethoxazole', 'Trimethoprim', 'Nitrofurantoin',
+    'Acyclovir', 'Valacyclovir', 'Oseltamivir', 'Ribavirin', 'Interferon', 'Lamivudine', 'Tenofovir',
+    'Efavirenz', 'Nevirapine', 'Zidovudine', 'Abacavir', 'Didanosine', 'Stavudine', 'Ritonavir', 'Lopinavir',
+    'Darunavir', 'Atazanavir', 'Saquinavir', 'Indinavir', 'Nelfinavir', 'Fosamprenavir', 'Tipranavir',
+    'Enfuvirtide', 'Maraviroc', 'Raltegravir', 'Elvitegravir', 'Dolutegravir', 'Bictegravir', 'Cabotegravir',
+    'Emtricitabine', 'Lamivudine', 'Zidovudine', 'Abacavir', 'Didanosine', 'Stavudine', 'Tenofovir',
+    'Adefovir', 'Entecavir', 'Telbivudine', 'Clevudine', 'Besifovir', 'Tenofovir alafenamide', 'Sofosbuvir',
+    'Ledipasvir', 'Velpatasvir', 'Voxilaprevir', 'Glecaprevir', 'Pibrentasvir', 'Elbasvir', 'Grazoprevir',
+    'Ombitasvir', 'Paritaprevir', 'Dasabuvir', 'Ritonavir', 'Simeprevir', 'Asunaprevir', 'Daclatasvir',
+    'Sofosbuvir', 'Ribavirin', 'Interferon alfa-2a', 'Interferon alfa-2b', 'Peginterferon alfa-2a',
+    'Peginterferon alfa-2b', 'Boceprevir', 'Telaprevir', 'Simeprevir', 'Asunaprevir', 'Daclatasvir',
+    'Ledipasvir', 'Ombitasvir', 'Paritaprevir', 'Dasabuvir', 'Glecaprevir', 'Pibrentasvir', 'Voxilaprevir',
+    'Elbasvir', 'Grazoprevir', 'Velpatasvir', 'Sofosbuvir', 'Ribavirin', 'Interferon', 'Lamivudine',
+    'Adefovir', 'Entecavir', 'Telbivudine', 'Tenofovir', 'Besifovir', 'Clevudine', 'Tenofovir alafenamide'
+]
 
 
 
@@ -85,8 +105,10 @@ def patient_ui(request):
 
         patientusername = request.session['patientusername']
         puser = User.objects.get(username=patientusername)
+        drug_histories = DrugSearchHistory.objects.filter(patient=puser.patient).order_by('-search_date')[:10]
+        pharmacy_histories = PharmacySelectionHistory.objects.filter(patient=puser.patient).order_by('-selection_date')[:10]
 
-        return render(request,'patient/patient_ui/profile.html' , {"puser":puser})
+        return render(request,'patient/patient_ui/profile.html' , {"puser":puser, "drug_histories": drug_histories, "pharmacy_histories": pharmacy_histories, "common_drugs": COMMON_DRUGS})
 
       else :
         return redirect('home')
@@ -110,6 +132,31 @@ def pviewprofile(request, patientusername):
           puser = User.objects.get(username=patientusername)
 
           return render(request,'patient/view_profile/view_profile.html', {"puser":puser})
+
+
+def save_drug_search(request):
+    if request.method == 'POST' and request.user.is_authenticated:
+        drug_name = request.POST.get('drug_name')
+        patient_obj = request.user.patient
+        DrugSearchHistory.objects.create(patient=patient_obj, drug_name=drug_name)
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'error'})
+
+
+def save_pharmacy_selection(request):
+    if request.method == 'POST' and request.user.is_authenticated:
+        pharmacy_name = request.POST.get('pharmacy_name')
+        pharmacy_location = request.POST.get('pharmacy_location')
+        drug_name = request.POST.get('drug_name')
+        patient_obj = request.user.patient
+        PharmacySelectionHistory.objects.create(
+            patient=patient_obj,
+            pharmacy_name=pharmacy_name,
+            pharmacy_location=pharmacy_location,
+            drug_name=drug_name
+        )
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'error'})
 
 
 def checkdisease(request):

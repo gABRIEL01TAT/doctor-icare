@@ -53,39 +53,6 @@
 </div>
 
 <br><br><br>
-<div class="container mt-5 mb-3" style="width:fit-content;">
-      <center>
-        <h1>Sign-In  As</h1>
-        </center>
-      
-      
-      <form>
-          <div class="container mt-5 mb-5">
-       <div class="row">
-          <div class="col">
-             <a href="{% url 'sign_in_admin' %}">
-      <img  alt="admin" src="{% static 'homepage/admin.png' %}"  class="img">
-      </a>
-          </div>
-      
-          <div class="col">
-      <a href="{% url 'sign_in_doctor' %}">
-      <img  alt="doctor" src="{% static 'homepage/doctor.png' %}"  class="img">
-      </a>
-          </div>
-      
-          <div class="col">
-      <a href="{% url 'sign_in_patient' %}">
-      <img  alt="patient" src="{% static 'homepage/patient.png' %}"  class="img">
-      </a>
-          </div>
-        </div>
-        </div>
-      </form>
-</div>
-
-
-    
 
     {% endif %}
 
@@ -109,18 +76,6 @@
 <form>
     <div class="container mt-5 mb-5">
  <div class="row">
-    <div class="col">
-       <a href="{% url 'sign_in_admin' %}">
-<img  alt="admin" src="{% static 'homepage/admin.png' %}"  class="img">
-</a>
-    </div>
-
-    <div class="col">
-<a href="{% url 'sign_in_doctor' %}">
-<img  alt="doctor" src="{% static 'homepage/doctor.png' %}"  class="img">
-</a>
-    </div>
-
     <div class="col">
 <a href="{% url 'sign_in_patient' %}">
 <img  alt="patient" src="{% static 'homepage/patient.png' %}"  class="img">
@@ -156,13 +111,6 @@
 <form>
     <div class="container mt-5 mb-5 ml-5 mr-5">
  <div class="row">
-
-    <div class="col">
-<a href="{% url 'signup_doctor' %}">
-<img  alt="doctor" src="{% static 'homepage/doctor.png' %}"  class="img">
-</a>
-    </div>
-
     <div class="col">
 <a href="{% url 'signup_patient' %}">
 <img  alt="patient" src="{% static 'homepage/patient.png' %}"  class="img">
