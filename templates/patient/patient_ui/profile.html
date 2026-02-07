@@ -4,7 +4,10 @@
  
     {% block head %}
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 {% endblock %}
 
 
@@ -16,6 +19,18 @@
 
 <br>
 <div class="container mt-2 mb-3">
+{% csrf_token %}
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    {% endfor %}
+{% endif %}
 <center><h2>Patient Profile</h2>
 </center><br>
 
@@ -39,6 +54,84 @@
 
 
         <div class="col" >
+            <!-- Location Update Section -->
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-map-marker-alt"></i> Your Location Information
+                        <small class="float-right">
+                            <button class="btn btn-sm btn-outline-light" type="button" data-toggle="collapse" data-target="#locationUpdate">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <strong>Country:</strong> {{ puser.patient.country|default:"Not set" }}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Region:</strong> {{ puser.patient.region|default:"Not set" }}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Address:</strong> {{ puser.patient.address|default:"Not set" }}
+                        </div>
+                    </div>
+                </div>
+                <div id="locationUpdate" class="collapse">
+                    <div class="card-body border-top">
+                        <form method="POST" action="{% url 'patient_ui' %}">
+                            {% csrf_token %}
+                            <div class="form-row">
+                                <div class="form-group col-md-4">
+                                    <label for="country">Country</label>
+                                    <select class="form-control" id="country" name="country" required>
+                                        <option value="">Select Country</option>
+                                        <option value="Cameroon" {% if puser.patient.country == 'Cameroon' %}selected{% endif %}>Cameroon</option>
+                                        <option value="Gabon" {% if puser.patient.country == 'Gabon' %}selected{% endif %}>Gabon</option>
+                                        <option value="Chad" {% if puser.patient.country == 'Chad' %}selected{% endif %}>Chad</option>
+                                        <option value="Central African Republic" {% if puser.patient.country == 'Central African Republic' %}selected{% endif %}>Central African Republic</option>
+                                        <option value="Equatorial Guinea" {% if puser.patient.country == 'Equatorial Guinea' %}selected{% endif %}>Equatorial Guinea</option>
+                                        <option value="Congo" {% if puser.patient.country == 'Congo' %}selected{% endif %}>Congo</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label for="region">Region</label>
+                                    <select class="form-control" id="region" name="region" required>
+                                        <option value="">Select Region</option>
+                                        <option value="Adamaoua" {% if puser.patient.region == 'Adamaoua' %}selected{% endif %}>Adamaoua</option>
+                                        <option value="Centre" {% if puser.patient.region == 'Centre' %}selected{% endif %}>Centre</option>
+                                        <option value="East" {% if puser.patient.region == 'East' %}selected{% endif %}>East</option>
+                                        <option value="Far North" {% if puser.patient.region == 'Far North' %}selected{% endif %}>Far North</option>
+                                        <option value="Littoral" {% if puser.patient.region == 'Littoral' %}selected{% endif %}>Littoral</option>
+                                        <option value="North" {% if puser.patient.region == 'North' %}selected{% endif %}>North</option>
+                                        <option value="Northwest" {% if puser.patient.region == 'Northwest' %}selected{% endif %}>Northwest</option>
+                                        <option value="South" {% if puser.patient.region == 'South' %}selected{% endif %}>South</option>
+                                        <option value="Southwest" {% if puser.patient.region == 'Southwest' %}selected{% endif %}>Southwest</option>
+                                        <option value="West" {% if puser.patient.region == 'West' %}selected{% endif %}>West</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label for="address">Address</label>
+                                    <input type="text" class="form-control" id="address" name="address" 
+                                           value="{{ puser.patient.address }}" placeholder="Enter your address" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Update Location
+                            </button>
+                            <small class="form-text text-muted">Note: Map will update after location change</small>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+               <div class="row mb-3">
+                <div class="col">
+                    <button id="lang-toggle" class="btn btn-outline-primary">Français</button>
+                </div>
+               </div>
                <div class="row">
                 <input type="text" id="drug-search" class="form-control" placeholder="Search for a drug..." list="drug-list">
                 <datalist id="drug-list">
@@ -128,47 +221,277 @@ let allPharmacies = [];
 let markers = [];
 let userMarker;
 let pharmaciesLoaded = false;
+let routingControl;
+
+// Define custom icons
+const redIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+const blueIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Cameroon regions coordinates mapping
+const cameroonRegions = {
+    'Adamaoua': { lat: 7.0, lng: 13.5 },
+    'Centre': { lat: 3.8667, lng: 11.5167 }, // Yaoundé, capital city
+    'East': { lat: 4.0, lng: 14.0 },
+    'Far North': { lat: 10.5, lng: 14.5 },
+    'Littoral': { lat: 4.0, lng: 10.0 },
+    'North': { lat: 8.5, lng: 13.5 },
+    'Northwest': { lat: 6.0, lng: 10.5 },
+    'South': { lat: 2.5, lng: 11.0 },
+    'Southwest': { lat: 5.0, lng: 9.0 },
+    'West': { lat: 5.5, lng: 10.5 }
+};
+
+// Function to geocode patient location from profile data
+function geocodePatientLocation(country, region, address) {
+    console.log('Geocoding location:', { country, region, address });
+    
+    // For Cameroon, use region-based coordinates
+    if (country.toLowerCase() === 'cameroon') {
+        const regionCoords = cameroonRegions[region];
+        if (regionCoords) {
+            console.log('Found region coordinates:', regionCoords);
+            return regionCoords;
+        } else {
+            console.log('Region not found, using default Yaoundé');
+        }
+    } else {
+        console.log('Country not Cameroon, using default');
+    }
+    
+    // Fallback to Yaoundé for unknown regions
+    return { lat: 3.8667, lng: 11.5167 };
+}
+const translations = {
+    en: {
+        searchPlaceholder: "Search for a drug...",
+        searchButton: "Search",
+        pharmaciesNearYou: "Pharmacies near you:",
+        available: "Available",
+        notAvailable: "Not Available",
+        select: "Select",
+        yourLocation: "Your Location",
+        profileLocation: "Profile Location",
+        locationFromProfile: "Location from your profile",
+        updateLocation: "Update Location",
+        updateYourLocation: "Update Your Location",
+        selectCountry: "Select Country",
+        selectRegion: "Select Region",
+        enterAddress: "Enter your address",
+        updating: "Updating...",
+        drugSearchHistory: "Drug Search History",
+        selectedPharmaciesHistory: "Selected Pharmacies History",
+        giveFeedbacks: "Give feedbacks",
+        patientProfile: "Patient Profile",
+        patientName: "Patient name :",
+        patientId: "Patient ID -",
+        patientEmail: "Patient email -",
+        viewProfile: "View Profile"
+    },
+    fr: {
+        searchPlaceholder: "Rechercher un médicament...",
+        searchButton: "Rechercher",
+        pharmaciesNearYou: "Pharmacies près de chez vous :",
+        available: "Disponible",
+        notAvailable: "Non disponible",
+        select: "Sélectionner",
+        yourLocation: "Votre position",
+        profileLocation: "Position du profil",
+        locationFromProfile: "Position de votre profil",
+        updateLocation: "Mettre à jour la position",
+        updateYourLocation: "Mettre à jour votre position",
+        selectCountry: "Sélectionner le pays",
+        selectRegion: "Sélectionner la région",
+        enterAddress: "Entrez votre adresse",
+        updating: "Mise à jour...",
+        drugSearchHistory: "Historique de recherche de médicaments",
+        selectedPharmaciesHistory: "Historique des pharmacies sélectionnées",
+        giveFeedbacks: "Donner des commentaires",
+        patientProfile: "Profil du patient",
+        patientName: "Nom du patient :",
+        patientId: "ID du patient -",
+        patientEmail: "Email du patient -",
+        viewProfile: "Voir le profil"
+    }
+};
+
+let currentLang = 'en';
+
+function translateText(key) {
+    return translations[currentLang][key] || key;
+}
+
+function updateLanguage() {
+    // Update placeholders and text
+    document.getElementById('drug-search').placeholder = translateText('searchPlaceholder');
+    document.getElementById('search-btn').textContent = translateText('searchButton');
+
+    // Update headings
+    const headings = document.querySelectorAll('h4');
+    headings.forEach(heading => {
+        if (heading.textContent.includes('Pharmacies near you')) {
+            heading.textContent = translateText('pharmaciesNearYou');
+        } else if (heading.textContent.includes('Drug Search History')) {
+            heading.textContent = translateText('drugSearchHistory');
+        } else if (heading.textContent.includes('Selected Pharmacies History')) {
+            heading.textContent = translateText('selectedPharmaciesHistory');
+        }
+    });
+
+    // Update buttons
+    const feedbackBtn = document.querySelector('button[data-target="#myModal-feedback"]');
+    if (feedbackBtn) {
+        feedbackBtn.textContent = translateText('giveFeedbacks');
+    }
+
+    // Update modal title
+    const modalTitle = document.querySelector('#myModal-feedback .modal-title');
+    if (modalTitle) {
+        modalTitle.textContent = translateText('giveFeedbacks');
+    }
+
+    // Update card content
+    const patientNameLabel = document.querySelector('.card-title');
+    if (patientNameLabel && patientNameLabel.textContent.includes('Patient name :')) {
+        patientNameLabel.innerHTML = translateText('patientName') + ' {{puser.patient.name}}';
+    }
+
+    // Update other labels
+    const labels = document.querySelectorAll('.card-text');
+    labels.forEach(label => {
+        if (label.textContent.includes('Patient ID -')) {
+            label.textContent = translateText('patientId') + ' {{puser.patient.user_id}}';
+        } else if (label.textContent.includes('Patient email -')) {
+            label.textContent = translateText('patientEmail') + ' {{puser.email}}';
+        }
+    });
+
+    // Update view profile button
+    const viewProfileBtn = document.querySelector('.btn-primary');
+    if (viewProfileBtn && viewProfileBtn.textContent === 'View Profile') {
+        viewProfileBtn.textContent = translateText('viewProfile');
+    }
+
+    // Update page title
+    const pageTitle = document.querySelector('h2');
+    if (pageTitle && pageTitle.textContent === 'Patient Profile') {
+        pageTitle.textContent = translateText('patientProfile');
+    }
+
+    // Update pharmacy list items
+    const pharmacyItems = document.querySelectorAll('.pharmacy-item');
+    pharmacyItems.forEach(item => {
+        const statusText = item.innerHTML;
+        if (statusText.includes('Available')) {
+            item.innerHTML = statusText.replace('Available', translateText('available'));
+        } else if (statusText.includes('Not Available')) {
+            item.innerHTML = statusText.replace('Not Available', translateText('notAvailable'));
+        }
+        const selectBtn = item.querySelector('.select-pharmacy');
+        if (selectBtn) {
+            selectBtn.textContent = translateText('select');
+        }
+    });
+
+    // Update user marker popup
+    if (userMarker) {
+        userMarker.setPopupContent(translateText('yourLocation'));
+    }
+
+    // Update location form labels
+    const countryLabel = document.querySelector('label[for="country"]');
+    if (countryLabel) countryLabel.textContent = translateText('selectCountry');
+    
+    const regionLabel = document.querySelector('label[for="region"]');
+    if (regionLabel) regionLabel.textContent = translateText('selectRegion');
+    
+    const addressLabel = document.querySelector('label[for="address"]');
+    if (addressLabel) addressLabel.textContent = translateText('enterAddress');
+    
+    const addressInput = document.getElementById('address');
+    if (addressInput) addressInput.placeholder = translateText('enterAddress');
+    
+    // Update location card title
+    const locationCardTitle = document.querySelector('#locationUpdate .card-header button');
+    if (locationCardTitle) {
+        const icon = locationCardTitle.querySelector('i');
+        const iconHtml = icon ? icon.outerHTML + ' ' : '';
+        locationCardTitle.innerHTML = iconHtml + translateText('updateYourLocation');
+    }
+}
 
 function initMap() {
-    // Default location (Sydney, Australia)
-    const defaultLat = -33.8688;
-    const defaultLng = 151.2093;
+    // Get patient location from profile data
+    const patientLocation = {
+        country: "{{ patient_location.country|escapejs }}",
+        region: "{{ patient_location.region|escapejs }}",
+        address: "{{ patient_location.address|escapejs }}"
+    };
+    
+    console.log('Patient location data:', patientLocation);
+    
+    const profileCoords = geocodePatientLocation(patientLocation.country, patientLocation.region, patientLocation.address);
+    
+    console.log('Profile coordinates:', profileCoords);
+    
+    // Use profile location as primary coordinates
+    const defaultLat = profileCoords.lat;
+    const defaultLng = profileCoords.lng;
 
-    map = L.map('map').setView([defaultLat, defaultLng], 15);
+    map = L.map('map').setView([defaultLat, defaultLng], 12);
+    
+    console.log('Map centered at:', defaultLat, defaultLng);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    // Try to get user's current location
+    // Try to get user's current location for more precision
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 userLat = position.coords.latitude;
                 userLng = position.coords.longitude;
+                console.log('Geolocation successful, using precise location:', userLat, userLng);
                 map.setView([userLat, userLng], 15);
-                userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+                userMarker = L.marker([userLat, userLng], {icon: redIcon}).addTo(map).bindPopup(translateText('yourLocation'));
                 searchPharmacies(userLat, userLng);
             },
-            () => {
-                // If geolocation fails, use default location
+            (error) => {
+                console.log('Geolocation failed, using profile location:', error.message);
+                // Use profile-based location as fallback
                 userLat = defaultLat;
                 userLng = defaultLng;
-                userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+                userMarker = L.marker([userLat, userLng], {icon: redIcon}).addTo(map).bindPopup(translateText('yourLocation') + ' (' + patientLocation.region + ', ' + patientLocation.country + ')');
                 searchPharmacies(userLat, userLng);
             }
         );
     } else {
-        // Browser doesn't support Geolocation
+        console.log('Geolocation not supported, using profile location');
+        // Use profile-based location
         userLat = defaultLat;
         userLng = defaultLng;
-        userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+        userMarker = L.marker([userLat, userLng], {icon: redIcon}).addTo(map).bindPopup(translateText('yourLocation') + ' (' + patientLocation.region + ', ' + patientLocation.country + ')');
         searchPharmacies(userLat, userLng);
     }
 }
 
 function searchPharmacies(lat, lng) {
-    const radius = 1500; // 1.5 km
+    const radius = 3000; // 3 km - increased for Cameroon context
     const query = `
         [out:json];
         node(around:${radius},${lat},${lng})["amenity"="pharmacy"];
@@ -196,7 +519,7 @@ function displayPharmacies(pharmacies) {
     markers = [];
 
     pharmacies.forEach(pharmacy => {
-        const marker = L.marker([pharmacy.lat, pharmacy.lon]).addTo(map);
+        const marker = L.marker([pharmacy.lat, pharmacy.lon], {icon: blueIcon}).addTo(map);
         marker.bindPopup(pharmacy.tags.name || 'Pharmacy');
         markers.push(marker);
     });
@@ -223,12 +546,12 @@ function filterPharmaciesByDrug(drugName) {
 
 function displayPharmacyList(pharmacies, drugName) {
     const listDiv = document.getElementById('pharmacy-list');
-    listDiv.innerHTML = '<h4>Pharmacies near you:</h4>';
+    listDiv.innerHTML = '<h4>' + translateText('pharmaciesNearYou') + '</h4>';
     pharmacies.forEach(pharmacy => {
         const item = document.createElement('div');
         item.className = 'pharmacy-item border p-2 mb-2';
-        const status = pharmacy.available ? 'Available' : 'Not Available';
-        const buttonHtml = pharmacy.available ? `<button class="btn btn-sm btn-success select-pharmacy" data-name="${pharmacy.tags.name || 'Pharmacy'}" data-location="${pharmacy.lat},${pharmacy.lon}" data-drug="${drugName}">Select</button>` : '';
+        const status = pharmacy.available ? translateText('available') : translateText('notAvailable');
+        const buttonHtml = pharmacy.available ? `<button class="btn btn-sm btn-success select-pharmacy" data-name="${pharmacy.tags.name || 'Pharmacy'}" data-location="${pharmacy.lat},${pharmacy.lon}" data-drug="${drugName}">${translateText('select')}</button>` : '';
         item.innerHTML = `
             <strong>${pharmacy.tags.name || 'Pharmacy'}</strong><br>
             Location: ${pharmacy.lat.toFixed(4)}, ${pharmacy.lon.toFixed(4)}<br>
@@ -243,21 +566,40 @@ function displayPharmacyList(pharmacies, drugName) {
 function selectPharmacy(pharmacyName, location, drugName) {
     // Clear all markers except user
     markers.forEach(marker => map.removeLayer(marker));
+    if (routingControl) {
+        map.removeControl(routingControl);
+    }
     map.removeLayer(userMarker);
 
     // Add back user marker
-    userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup('Your Location');
+    userMarker = L.marker([userLat, userLng], {icon: redIcon}).addTo(map).bindPopup(translateText('yourLocation'));
 
     // Find and add selected pharmacy marker
     const pharmacy = allPharmacies.find(p => (p.tags.name || 'Pharmacy') === pharmacyName);
     if (pharmacy) {
-        const marker = L.marker([pharmacy.lat, pharmacy.lon]).addTo(map);
-        marker.bindPopup(pharmacy.tags.name || 'Pharmacy').openPopup();
-        markers = [marker];
-        map.setView([pharmacy.lat, pharmacy.lon], 16);
+        const pharmacyMarker = L.marker([pharmacy.lat, pharmacy.lon], {icon: blueIcon}).addTo(map);
+        pharmacyMarker.bindPopup(pharmacy.tags.name || 'Pharmacy').openPopup();
+        markers = [pharmacyMarker];
+
+        // Add routing
+        routingControl = L.Routing.control({
+            waypoints: [
+                L.latLng(userLat, userLng),
+                L.latLng(pharmacy.lat, pharmacy.lon)
+            ],
+            routeWhileDragging: false,
+            createMarker: function() { return null; }, // Don't create default markers
+            lineOptions: {
+                styles: [{ color: 'blue', weight: 6 }]
+            }
+        }).addTo(map);
+
+        // Fit map to show both points
+        const group = new L.featureGroup([userMarker, pharmacyMarker]);
+        map.fitBounds(group.getBounds().pad(0.1));
     }
 
-    // Save selection to history
+    // Save selection to history (without alert)
     savePharmacySelection(pharmacyName, location, drugName);
 }
 
@@ -273,7 +615,7 @@ function savePharmacySelection(pharmacyName, location, drugName) {
             csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
         },
         success: function(data) {
-            alert('Pharmacy selected and saved to history.');
+            // Pharmacy saved successfully (no alert)
         }
     });
 }
@@ -282,6 +624,12 @@ window.addEventListener('load', initMap);
 
 
   $(document).ready(function() {
+    $('#lang-toggle').click(function() {
+        currentLang = currentLang === 'en' ? 'fr' : 'en';
+        $(this).text(currentLang === 'en' ? 'Français' : 'English');
+        updateLanguage();
+    });
+
     $('#search-btn').click(function() {
         const drugName = $('#drug-search').val().trim();
         if (drugName) {
@@ -331,6 +679,16 @@ window.addEventListener('load', initMap);
   
   
   });
+
+    // Handle location update form submission
+    $('form[action="{% url "patient_ui" %}"]').on('submit', function(e) {
+        // The form will submit normally, but we can add loading state
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Updating...').prop('disabled', true);
+        
+        // The page will reload after successful submission due to redirect
+    });
       
    });
 

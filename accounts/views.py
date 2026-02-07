@@ -32,7 +32,7 @@ def signup_patient(request):
 
     if request.method == 'POST':
       
-      if request.POST['username'] and request.POST['email'] and  request.POST['name'] and request.POST['dob'] and request.POST['gender'] and request.POST['address']and request.POST['mobile']and request.POST['password']and request.POST['password1'] :
+      if request.POST['username'] and request.POST['email'] and  request.POST['name'] and request.POST['dob'] and request.POST['gender'] and request.POST['country'] and request.POST['region'] and request.POST['address']and request.POST['mobile']and request.POST['password']and request.POST['password1'] :
 
           username =  request.POST['username']
           email =  request.POST['email']
@@ -40,6 +40,8 @@ def signup_patient(request):
           name =  request.POST['name']
           dob =  request.POST['dob']
           gender =  request.POST['gender']
+          country = request.POST['country']
+          region = request.POST['region']
           address =  request.POST['address']
           mobile_no = request.POST['mobile']
           password =  request.POST.get('password')
@@ -58,7 +60,7 @@ def signup_patient(request):
                 user = User.objects.create_user(username=username,password=password,email=email)   
                 user.save()
                 
-                patientnew = patient(user=user,name=name,dob=dob,gender=gender,address=address,mobile_no=mobile_no)
+                patientnew = patient(user=user,name=name,dob=dob,gender=gender,country=country,region=region,address=address,mobile_no=mobile_no)
                 patientnew.save()
                 messages.info(request,'user created sucessfully')
                 

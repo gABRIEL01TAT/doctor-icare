@@ -20,6 +20,8 @@ class patient(models.Model):
     name = models.CharField(max_length = 50)
     dob = models.DateField()
     address = models.CharField(max_length = 100)
+    country = models.CharField(max_length = 50, default='Cameroon')
+    region = models.CharField(max_length = 50, default='Centre')
     mobile_no = models.CharField(max_length = 15)
     gender = models.CharField(max_length = 10)
 

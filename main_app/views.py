@@ -108,16 +108,47 @@ def patient_ui(request):
         drug_histories = DrugSearchHistory.objects.filter(patient=puser.patient).order_by('-search_date')[:10]
         pharmacy_histories = PharmacySelectionHistory.objects.filter(patient=puser.patient).order_by('-selection_date')[:10]
 
-        return render(request,'patient/patient_ui/profile.html' , {"puser":puser, "drug_histories": drug_histories, "pharmacy_histories": pharmacy_histories, "common_drugs": COMMON_DRUGS})
+        # Get patient location data for map initialization
+        patient_location = {
+            'country': puser.patient.country,
+            'region': puser.patient.region,
+            'address': puser.patient.address
+        }
+
+        return render(request,'patient/patient_ui/profile.html' , {
+            "puser":puser, 
+            "drug_histories": drug_histories, 
+            "pharmacy_histories": pharmacy_histories, 
+            "common_drugs": COMMON_DRUGS,
+            "patient_location": patient_location
+        })
 
       else :
         return redirect('home')
 
-
-
-    if request.method == 'POST':
-
-       return render(request,'patient/patient_ui/profile.html')
+    elif request.method == 'POST':
+        if request.user.is_authenticated:
+            patientusername = request.session['patientusername']
+            puser = User.objects.get(username=patientusername)
+            
+            # Update patient location information
+            country = request.POST.get('country')
+            region = request.POST.get('region')
+            address = request.POST.get('address')
+            
+            if country and region and address:
+                puser.patient.country = country
+                puser.patient.region = region
+                puser.patient.address = address
+                puser.patient.save()
+                
+                messages.success(request, 'Your location information has been updated successfully!')
+            else:
+                messages.error(request, 'Please fill in all location fields.')
+            
+            return redirect('patient_ui')
+        else:
+            return redirect('home')
     
 
 
@@ -138,7 +169,18 @@ def save_drug_search(request):
     if request.method == 'POST' and request.user.is_authenticated:
         drug_name = request.POST.get('drug_name')
         patient_obj = request.user.patient
-        DrugSearchHistory.objects.create(patient=patient_obj, drug_name=drug_name)
+
+        # Check if this drug was searched in the last 10 seconds
+        from django.utils import timezone
+        recent_search = DrugSearchHistory.objects.filter(
+            patient=patient_obj,
+            drug_name=drug_name,
+            search_date__gte=timezone.now() - timezone.timedelta(seconds=10)
+        ).exists()
+
+        if not recent_search:
+            DrugSearchHistory.objects.create(patient=patient_obj, drug_name=drug_name)
+
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error'})
 
